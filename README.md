@@ -34,6 +34,12 @@ Override the target URL:
 TARGET_URL="https://lxp70rt7wj.execute-api.eu-west-2.amazonaws.com/api/orders/testing" k6 run loadtest/orders-testing.js
 ```
 
+Send 500 requests in parallel (500 concurrent VUs):
+
+```bash
+PARALLEL_VUS=500 PARALLEL_DURATION="30s" k6 run loadtest/orders-testing.js
+```
+
 Pass additional headers (JSON):
 
 ```bash
