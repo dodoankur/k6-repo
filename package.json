@@ -4,8 +4,10 @@
   "private": true,
   "description": "K6 load tests (run locally or via Docker).",
   "scripts": {
-    "load": "mkdir -p results && k6 run loadtest/orders-testing.js",
-    "load:parallel": "mkdir -p results && PARALLEL_VUS=500 PARALLEL_DURATION=30s k6 run loadtest/orders-testing.js",
+    "load": "npm run load:docker",
+    "load:parallel": "npm run load:parallel:docker",
+    "load:local": "mkdir -p results && k6 run loadtest/orders-testing.js",
+    "load:parallel:local": "mkdir -p results && PARALLEL_VUS=500 PARALLEL_DURATION=30s k6 run loadtest/orders-testing.js",
     "load:docker": "mkdir -p results && docker run --rm -i -v \"$PWD:/work\" -w /work grafana/k6:latest run loadtest/orders-testing.js",
     "load:parallel:docker": "mkdir -p results && docker run --rm -i -e PARALLEL_VUS=500 -e PARALLEL_DURATION=30s -v \"$PWD:/work\" -w /work grafana/k6:latest run loadtest/orders-testing.js"
   }

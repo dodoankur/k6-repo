@@ -20,16 +20,16 @@ Install (there are no JS dependencies, this just gives you `npm run ...` command
 npm install
 ```
 
-Run with Docker (no local K6 install required):
+Run (defaults to Docker; no local K6 install required):
 
 ```bash
-npm run load:docker
+npm run load
 ```
 
 Run 500-parallel mode with Docker:
 
 ```bash
-npm run load:parallel:docker
+npm run load:parallel
 ```
 
 ### Local K6
