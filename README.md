@@ -12,6 +12,26 @@ Install K6 locally (recommended) or run via Docker.
 
 ## Run the test
 
+### Using npm scripts (recommended)
+
+Install (there are no JS dependencies, this just gives you `npm run ...` commands):
+
+```bash
+npm install
+```
+
+Run with Docker (no local K6 install required):
+
+```bash
+npm run load:docker
+```
+
+Run 500-parallel mode with Docker:
+
+```bash
+npm run load:parallel:docker
+```
+
 ### Local K6
 
 ```bash
