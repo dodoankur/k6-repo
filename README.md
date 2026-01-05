@@ -4,29 +4,23 @@ This repo contains a K6 load test targeting:
 
 - `https://lxp70rt7wj.execute-api.eu-west-2.amazonaws.com/api/orders/testing`
 
-## Prerequisites
-
-Install K6 locally (recommended) or run via Docker.
-
-- Local install docs: `https://k6.io/docs/get-started/installation/`
-
 ## Run the test
 
 ### Using npm scripts (recommended)
 
-Install (there are no JS dependencies, this just gives you `npm run ...` commands):
+Install (downloads the official K6 binary into `./bin`):
 
 ```bash
 npm install
 ```
 
-Run (defaults to Docker; no local K6 install required):
+Run:
 
 ```bash
 npm run load
 ```
 
-Run 500-parallel mode with Docker:
+Run 500-parallel mode:
 
 ```bash
 npm run load:parallel
@@ -34,9 +28,22 @@ npm run load:parallel
 
 ### Local K6
 
+If you want to run `k6 ...` directly in your shell, add this repo’s `./bin` to your PATH:
+
+```bash
+export PATH="$PWD/bin:$PATH"
+```
+
 ```bash
 mkdir -p results
 k6 run loadtest/orders-testing.js
+```
+
+You can also run the repo-local binary directly:
+
+```bash
+mkdir -p results
+./bin/k6 run loadtest/orders-testing.js
 ```
 
 ### Docker

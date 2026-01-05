@@ -8,7 +8,8 @@ const TARGET_URL =
   "https://lxp70rt7wj.execute-api.eu-west-2.amazonaws.com/api/orders/testing";
  
 function asInt(value, fallback) {
-  const n = Number.parseInt(String(value ?? ""), 10);
+  const s = value === undefined || value === null ? "" : String(value);
+  const n = Number.parseInt(s, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
@@ -31,19 +32,17 @@ function extraHeaders() {
  
 export const errors = new Rate("errors");
  
-export const options = (() => {
-  const base = {
-    discardResponseBodies: true,
-    thresholds: {
-      http_req_failed: ["rate<0.01"], // <1% errors
-      http_req_duration: ["p(95)<500", "p(99)<1000"], // latency SLOs (ms)
-      errors: ["rate<0.01"],
-    },
+export const options = (function () {
+  const thresholds = {
+    http_req_failed: ["rate<0.01"], // <1% errors
+    http_req_duration: ["p(95)<500", "p(99)<1000"], // latency SLOs (ms)
+    errors: ["rate<0.01"],
   };
 
   if (PARALLEL_VUS > 0) {
     return {
-      ...base,
+      discardResponseBodies: true,
+      thresholds: thresholds,
       scenarios: {
         parallel: {
           executor: "constant-vus",
@@ -55,7 +54,8 @@ export const options = (() => {
   }
 
   return {
-    ...base,
+    discardResponseBodies: true,
+    thresholds: thresholds,
     stages: [
       { duration: "30s", target: 5 }, // warm up
       { duration: "1m", target: 25 }, // ramp up
@@ -67,11 +67,17 @@ export const options = (() => {
 })();
  
 export default function () {
+  const headers = {
+    "User-Agent": "k6-loadtest",
+  };
+  const extra = extraHeaders();
+  for (const k in extra) {
+    // eslint-disable-next-line no-prototype-builtins
+    if (extra.hasOwnProperty(k)) headers[k] = extra[k];
+  }
+
   const res = http.get(TARGET_URL, {
-    headers: {
-      "User-Agent": "k6-loadtest",
-      ...extraHeaders(),
-    },
+    headers: headers,
     tags: { endpoint: "orders-testing" },
   });
  
