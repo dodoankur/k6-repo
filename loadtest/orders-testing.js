@@ -156,6 +156,15 @@ export function handleSummary(data) {
     return n < 10 ? "0" + n : "" + n;
   }
 
+  function sanitizeFileName(name) {
+    if (!name) return null;
+    const s = String(name).trim();
+    if (!s) return null;
+    if (s.includes("/") || s.includes("\\") || s.includes("..")) return null;
+    if (!s.endsWith(".json")) return null;
+    return s;
+  }
+
   // Use local time for filenames to match your machine clock.
   const now = new Date();
   const ts =
@@ -167,7 +176,10 @@ export function handleSummary(data) {
     pad2(now.getMinutes()) +
     pad2(now.getSeconds());
 
+  const requested = sanitizeFileName(__ENV.SUMMARY_FILE);
+  const filename = requested || "summary-" + ts + ".json";
+
   return {
-    ["results/summary-" + ts + ".json"]: JSON.stringify(data, null, 2),
+    ["results/" + filename]: JSON.stringify(data, null, 2),
   };
 }

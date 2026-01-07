@@ -34,7 +34,10 @@ Start the local results viewer:
 npm run web
 ```
 
-Then open `http://localhost:3000`. You can select any `results/summary-*.json` file (newest first) and see charts.
+Then open `http://localhost:3000`.
+
+- You can **run a new test from the page** (TARGET_URL / PARALLEL_VUS / TOTAL_DURATION / etc.), watch live output, and then click **View result**.
+- You can also select any existing `results/summary-*.json` file (newest first) and see charts.
 
 ### Local K6
 

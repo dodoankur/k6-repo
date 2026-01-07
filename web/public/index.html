@@ -124,6 +124,45 @@
         max-height: 380px;
         font-size: 12px;
       }
+      input, textarea {
+        width: 100%;
+        padding: 10px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(0,0,0,0.18);
+        color: var(--text);
+        outline: none;
+      }
+      textarea { min-height: 74px; resize: vertical; }
+      label { display:block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+      .btn {
+        background: rgba(78,161,255,0.18);
+        border: 1px solid rgba(78,161,255,0.35);
+        color: var(--text);
+        padding: 8px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      .btn:hover { background: rgba(78,161,255,0.25); }
+      .btn.danger {
+        background: rgba(255,107,107,0.14);
+        border-color: rgba(255,107,107,0.35);
+      }
+      .row2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+      .logbox {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(0,0,0,0.18);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        max-height: 260px;
+        overflow: auto;
+      }
       @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -153,6 +192,47 @@
           <span class="meta" id="selectedMeta"></span>
         </div>
         <div class="body">
+          <div class="card" style="margin-bottom: 12px">
+            <div class="k">Run a new load test</div>
+            <div class="row2" style="margin-top: 10px">
+              <div>
+                <label for="targetUrl">TARGET_URL</label>
+                <input id="targetUrl" placeholder="https://..." />
+              </div>
+              <div>
+                <label for="totalDuration">TOTAL_DURATION (e.g. 30s, 5m, 1h)</label>
+                <input id="totalDuration" placeholder="e.g. 5m" />
+              </div>
+            </div>
+
+            <div class="row3" style="margin-top: 10px">
+              <div>
+                <label for="parallelVus">PARALLEL_VUS (optional)</label>
+                <input id="parallelVus" placeholder="e.g. 500" />
+              </div>
+              <div>
+                <label for="parallelDuration">PARALLEL_DURATION (optional, e.g. 30s)</label>
+                <input id="parallelDuration" placeholder="e.g. 30s" />
+              </div>
+              <div>
+                <label for="extraHeadersJson">EXTRA_HEADERS_JSON (optional)</label>
+                <input id="extraHeadersJson" placeholder='{"Authorization":"Bearer ..."}' />
+              </div>
+            </div>
+
+            <div style="display:flex; gap:10px; align-items:center; margin-top: 12px">
+              <button class="btn" id="startRun">Start</button>
+              <button class="btn danger" id="stopRun" disabled>Stop</button>
+              <div class="meta" id="runStatus" style="margin-left:auto">Idle</div>
+            </div>
+
+            <div class="logbox" id="runLog" style="margin-top: 10px"></div>
+            <div style="display:flex; gap:10px; margin-top: 10px">
+              <button class="btn" id="viewResult" disabled>View result</button>
+              <div class="meta" id="runHint"></div>
+            </div>
+          </div>
+
           <div class="grid" style="margin-bottom: 12px">
             <div class="card">
               <div class="k">Requests</div>
@@ -281,6 +361,9 @@
       let breakdownChart = null;
       let rateChart = null;
       let selected = null;
+      let activeEventSource = null;
+      let activeRunId = null;
+      let activeSummaryFile = null;
 
       function fmt(n, digits = 2) {
         if (n === null || n === undefined || Number.isNaN(n)) return "—";
@@ -365,6 +448,103 @@
 
         // Auto-select latest
         await loadOne(files[0].name, files[0]);
+      }
+
+      function appendLog(text, stream) {
+        const box = el("runLog");
+        const prefix = stream === "stderr" ? "[stderr] " : "";
+        // k6 uses carriage returns for progress; convert to newlines for readability
+        const normalized = String(text).replace(/\r/g, "\n");
+        box.textContent += prefix + normalized;
+        if (box.textContent.length > 200000) {
+          box.textContent = box.textContent.slice(-150000);
+        }
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function setRunUi(state) {
+        el("startRun").disabled = state === "running";
+        el("stopRun").disabled = state !== "running";
+      }
+
+      async function startRun() {
+        el("runLog").textContent = "";
+        el("viewResult").disabled = true;
+        el("runHint").textContent = "";
+        activeSummaryFile = null;
+
+        const payload = {
+          targetUrl: el("targetUrl").value.trim() || null,
+          totalDuration: el("totalDuration").value.trim() || null,
+          parallelVus: el("parallelVus").value.trim() || null,
+          parallelDuration: el("parallelDuration").value.trim() || null,
+          extraHeadersJson: el("extraHeadersJson").value.trim() || null,
+        };
+
+        el("runStatus").textContent = "Starting…";
+        setRunUi("running");
+
+        const res = await fetch("/api/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const msg = (await res.json().catch(() => null))?.error || "Failed to start run";
+          el("runStatus").textContent = "Idle";
+          setRunUi("idle");
+          throw new Error(msg);
+        }
+        const data = await res.json();
+        activeRunId = data.id;
+        activeSummaryFile = data.summaryFile;
+        el("runStatus").textContent = `Running (${activeRunId.slice(0, 8)})`;
+        el("runHint").textContent = `Summary will be saved as ${activeSummaryFile}`;
+
+        if (activeEventSource) activeEventSource.close();
+        activeEventSource = new EventSource(`/api/run/${encodeURIComponent(activeRunId)}/events`);
+        activeEventSource.addEventListener("log", (ev) => {
+          try {
+            const p = JSON.parse(ev.data.replace(/\\n/g, "\n"));
+            appendLog(p.line, p.stream);
+          } catch (_) {
+            appendLog(ev.data, "stdout");
+          }
+        });
+        activeEventSource.addEventListener("status", (_ev) => {
+          // no-op for now
+        });
+        activeEventSource.addEventListener("done", async (ev) => {
+          let p = null;
+          try {
+            p = JSON.parse(ev.data.replace(/\\n/g, "\n"));
+          } catch (_) {
+            p = null;
+          }
+          setRunUi("idle");
+          el("runStatus").textContent = p && p.ok ? "Done" : "Done (thresholds may have failed)";
+          if (p && p.summaryFile) activeSummaryFile = p.summaryFile;
+          el("viewResult").disabled = !activeSummaryFile;
+          await loadFiles().catch(() => {});
+          if (activeSummaryFile) {
+            el("runHint").textContent = `Run finished. Result: ${activeSummaryFile}`;
+          }
+          try { activeEventSource.close(); } catch (_) {}
+        });
+        activeEventSource.onerror = () => {
+          // keep UI stable; SSE may disconnect when done
+        };
+      }
+
+      async function stopRun() {
+        if (!activeRunId) return;
+        await fetch(`/api/run/${encodeURIComponent(activeRunId)}/stop`, { method: "POST" }).catch(() => {});
+        el("runStatus").textContent = "Stopping…";
+      }
+
+      async function viewResult() {
+        if (!activeSummaryFile) return;
+        await loadOne(activeSummaryFile, null).catch(() => {});
       }
 
       function upsertCharts(summary) {
@@ -591,6 +771,9 @@
       }
 
       el("refresh").addEventListener("click", () => loadFiles().catch((e) => (errorEl.textContent = e.message)));
+      el("startRun").addEventListener("click", () => startRun().catch((e) => (errorEl.textContent = e.message)));
+      el("stopRun").addEventListener("click", () => stopRun());
+      el("viewResult").addEventListener("click", () => viewResult());
       loadFiles().catch((e) => {
         statusEl.textContent = "Error";
         errorEl.textContent = e.message;
