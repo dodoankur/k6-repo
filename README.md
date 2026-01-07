@@ -74,6 +74,30 @@ Override the target URL:
 TARGET_URL="https://lxp70rt7wj.execute-api.eu-west-2.amazonaws.com/api/orders/testing" k6 run loadtest/orders-testing.js
 ```
 
+Send a POST request with JSON payload:
+
+```bash
+REQUEST_METHOD=POST PAYLOAD_JSON='{"foo":"bar"}' k6 run loadtest/orders-testing.js
+```
+
+Send a POST request with raw payload + content-type:
+
+```bash
+REQUEST_METHOD=POST CONTENT_TYPE="text/plain" PAYLOAD_RAW="hello" k6 run loadtest/orders-testing.js
+```
+
+Send cookies (raw header string):
+
+```bash
+COOKIES="a=b; c=d" k6 run loadtest/orders-testing.js
+```
+
+Send cookies (JSON map):
+
+```bash
+COOKIES_JSON='{"session":"abc","user":"123"}' k6 run loadtest/orders-testing.js
+```
+
 Send 500 requests in parallel (500 concurrent VUs):
 
 ```bash

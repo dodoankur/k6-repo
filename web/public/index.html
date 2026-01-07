@@ -213,6 +213,17 @@
               </div>
             </div>
 
+            <div class="row2" style="margin-top: 10px">
+              <div>
+                <label for="requestMethod">REQUEST_METHOD</label>
+                <input id="requestMethod" placeholder="GET or POST" value="GET" />
+              </div>
+              <div>
+                <label for="contentType">CONTENT_TYPE (optional)</label>
+                <input id="contentType" placeholder="application/json" />
+              </div>
+            </div>
+
             <div class="row3" style="margin-top: 10px">
               <div>
                 <label for="parallelVus">PARALLEL_VUS (optional)</label>
@@ -225,6 +236,17 @@
               <div>
                 <label for="extraHeadersJson">EXTRA_HEADERS_JSON (optional)</label>
                 <input id="extraHeadersJson" placeholder='{"Authorization":"Bearer ..."}' />
+              </div>
+            </div>
+
+            <div class="row2" style="margin-top: 10px">
+              <div>
+                <label for="cookies">COOKIES (optional: raw "a=b; c=d" OR JSON {"a":"b"})</label>
+                <input id="cookies" placeholder='a=b; c=d  OR  {"session":"abc"}' />
+              </div>
+              <div>
+                <label for="payload">PAYLOAD (optional: JSON or raw)</label>
+                <textarea id="payload" placeholder='{"foo":"bar"}'></textarea>
               </div>
             </div>
 
@@ -517,9 +539,13 @@
         const payload = {
           targetUrl: el("targetUrl").value.trim() || null,
           totalDuration: el("totalDuration").value.trim() || null,
+          requestMethod: el("requestMethod").value.trim() || null,
+          contentType: el("contentType").value.trim() || null,
           parallelVus: el("parallelVus").value.trim() || null,
           parallelDuration: el("parallelDuration").value.trim() || null,
           extraHeadersJson: el("extraHeadersJson").value.trim() || null,
+          cookies: el("cookies").value.trim() || null,
+          payload: el("payload").value || null,
         };
 
         el("runStatus").textContent = "Starting…";

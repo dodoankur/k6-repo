@@ -77,6 +77,40 @@ function sanitizeInt(value, min, max) {
   return n;
 }
 
+function sanitizeMethod(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim().toUpperCase();
+  if (!s) return null;
+  // Allow common HTTP methods
+  if (!/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(s)) return null;
+  return s;
+}
+
+function sanitizeContentType(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  // Basic safety: keep it short and single-line.
+  if (s.length > 200 || /[\r\n]/.test(s)) return null;
+  return s;
+}
+
+function sanitizeCookieString(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  if (s.length > 4000 || /[\r\n]/.test(s)) return null;
+  return s;
+}
+
+function sanitizePayload(value) {
+  if (value === undefined || value === null) return null;
+  const s = String(value);
+  if (!s.trim()) return null;
+  if (s.length > 20000) return null;
+  return s;
+}
+
 function safeSummaryFilename(runId) {
   const d = new Date();
   const pad2 = (n) => (n < 10 ? `0${n}` : String(n));
@@ -146,6 +180,10 @@ app.post("/api/run", (req, res) => {
   const parallelDuration = sanitizeDuration(req.body?.parallelDuration);
   const totalDuration = sanitizeDuration(req.body?.totalDuration);
   const extraHeadersJson = req.body?.extraHeadersJson ? String(req.body.extraHeadersJson) : null;
+  const requestMethod = sanitizeMethod(req.body?.requestMethod);
+  const contentType = sanitizeContentType(req.body?.contentType);
+  const payload = sanitizePayload(req.body?.payload);
+  const cookies = sanitizeCookieString(req.body?.cookies);
 
   const summaryFile = safeSummaryFilename(id);
   const env = {
@@ -157,6 +195,32 @@ app.post("/api/run", (req, res) => {
   if (parallelDuration) env.PARALLEL_DURATION = parallelDuration;
   if (totalDuration) env.TOTAL_DURATION = totalDuration;
   if (extraHeadersJson) env.EXTRA_HEADERS_JSON = extraHeadersJson;
+  if (requestMethod) env.REQUEST_METHOD = requestMethod;
+  if (contentType) env.CONTENT_TYPE = contentType;
+
+  if (cookies) {
+    // If valid JSON object, pass as COOKIES_JSON; else pass raw cookie header string.
+    try {
+      const parsed = JSON.parse(cookies);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        env.COOKIES_JSON = JSON.stringify(parsed);
+      } else {
+        env.COOKIES = cookies;
+      }
+    } catch (_) {
+      env.COOKIES = cookies;
+    }
+  }
+
+  if (payload) {
+    // If valid JSON, pass as PAYLOAD_JSON; else PAYLOAD_RAW.
+    try {
+      const parsed = JSON.parse(payload);
+      env.PAYLOAD_JSON = JSON.stringify(parsed);
+    } catch (_) {
+      env.PAYLOAD_RAW = payload;
+    }
+  }
 
   const args = ["run", K6_SCRIPT];
 

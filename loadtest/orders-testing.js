@@ -6,6 +6,38 @@ import { Rate } from "k6/metrics";
 const TARGET_URL =
   __ENV.TARGET_URL ||
   "https://lxp70rt7wj.execute-api.eu-west-2.amazonaws.com/api/orders/testing";
+
+// Request configuration
+const REQUEST_METHOD = String(__ENV.REQUEST_METHOD || "GET").toUpperCase();
+const CONTENT_TYPE = __ENV.CONTENT_TYPE ? String(__ENV.CONTENT_TYPE) : "";
+
+function requestBody() {
+  if (__ENV.PAYLOAD_JSON) return String(__ENV.PAYLOAD_JSON);
+  if (__ENV.PAYLOAD_RAW) return String(__ENV.PAYLOAD_RAW);
+  return null;
+}
+
+function cookiesHeaderValue() {
+  if (__ENV.COOKIES_JSON) {
+    try {
+      const obj = JSON.parse(__ENV.COOKIES_JSON);
+      if (!obj || typeof obj !== "object") return "";
+      const parts = [];
+      for (const k in obj) {
+        // eslint-disable-next-line no-prototype-builtins
+        if (!obj.hasOwnProperty(k)) continue;
+        const v = obj[k];
+        if (v === undefined || v === null) continue;
+        parts.push(encodeURIComponent(String(k)) + "=" + encodeURIComponent(String(v)));
+      }
+      return parts.join("; ");
+    } catch (_) {
+      return "";
+    }
+  }
+  if (__ENV.COOKIES) return String(__ENV.COOKIES);
+  return "";
+}
  
 function asInt(value, fallback) {
   const s = value === undefined || value === null ? "" : String(value);
@@ -138,10 +170,20 @@ export default function () {
     if (extra.hasOwnProperty(k)) headers[k] = extra[k];
   }
 
-  const res = http.get(TARGET_URL, {
-    headers: headers,
-    tags: { endpoint: "orders-testing" },
-  });
+  const cookieValue = cookiesHeaderValue();
+  if (cookieValue) headers["Cookie"] = cookieValue;
+  if (CONTENT_TYPE && requestBody() !== null) headers["Content-Type"] = CONTENT_TYPE;
+  if (!headers["Content-Type"] && __ENV.PAYLOAD_JSON) headers["Content-Type"] = "application/json";
+
+  const method = REQUEST_METHOD;
+  const body = requestBody();
+  const params = { headers: headers, tags: { endpoint: "orders-testing" } };
+
+  // k6 ignores bodies for GET/HEAD; pass null to keep intent explicit.
+  const res =
+    method === "GET" || method === "HEAD"
+      ? http.request(method, TARGET_URL, null, params)
+      : http.request(method, TARGET_URL, body === null ? "" : body, params);
  
   const ok = check(res, {
     "status is 2xx": (r) => r.status >= 200 && r.status < 300,
