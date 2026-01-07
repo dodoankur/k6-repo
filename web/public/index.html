@@ -163,6 +163,14 @@
         max-height: 260px;
         overflow: auto;
       }
+      progress {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      progress::-webkit-progress-bar { background: rgba(255,255,255,0.06); }
+      progress::-webkit-progress-value { background: rgba(78,161,255,0.65); }
       @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -224,6 +232,11 @@
               <button class="btn" id="startRun">Start</button>
               <button class="btn danger" id="stopRun" disabled>Stop</button>
               <div class="meta" id="runStatus" style="margin-left:auto">Idle</div>
+            </div>
+
+            <div style="margin-top: 10px">
+              <progress id="runProgress" max="100" value="0"></progress>
+              <div class="meta" id="runProgressText" style="margin-top: 6px"></div>
             </div>
 
             <div class="logbox" id="runLog" style="margin-top: 10px"></div>
@@ -364,6 +377,7 @@
       let activeEventSource = null;
       let activeRunId = null;
       let activeSummaryFile = null;
+      let logText = "";
 
       function fmt(n, digits = 2) {
         if (n === null || n === undefined || Number.isNaN(n)) return "—";
@@ -450,15 +464,39 @@
         await loadOne(files[0].name, files[0]);
       }
 
+      function applyCarriageReturns(prev, chunk) {
+        // Emulate terminal carriage return: overwrite current line.
+        let out = prev;
+        const s = String(chunk);
+        for (let i = 0; i < s.length; i++) {
+          const ch = s[i];
+          if (ch === "\r") {
+            const idx = out.lastIndexOf("\n");
+            out = idx === -1 ? "" : out.slice(0, idx + 1);
+          } else {
+            out += ch;
+          }
+        }
+        return out;
+      }
+
+      function updateProgressFromText(text) {
+        // Extract: "[  46% ] 300 VUs  0.9s/2s"
+        const m = /\[\s*(\d{1,3})%\s*\]\s*([0-9]+)\s*VUs?\s*([0-9.]+s)\/([0-9.]+s)/.exec(text);
+        if (!m) return;
+        const pct = Math.max(0, Math.min(100, Number(m[1])));
+        el("runProgress").value = pct;
+        el("runProgressText").textContent = `${pct}% • ${m[2]} VUs • ${m[3]}/${m[4]}`;
+      }
+
       function appendLog(text, stream) {
         const box = el("runLog");
-        const prefix = stream === "stderr" ? "[stderr] " : "";
-        // k6 uses carriage returns for progress; convert to newlines for readability
-        const normalized = String(text).replace(/\r/g, "\n");
-        box.textContent += prefix + normalized;
-        if (box.textContent.length > 200000) {
-          box.textContent = box.textContent.slice(-150000);
-        }
+        const prefix = stream === "stderr" ? "time/error: " : "";
+        const chunk = prefix + String(text);
+        logText = applyCarriageReturns(logText, chunk);
+        if (logText.length > 200000) logText = logText.slice(-150000);
+        box.textContent = logText;
+        updateProgressFromText(chunk);
         box.scrollTop = box.scrollHeight;
       }
 
@@ -469,9 +507,12 @@
 
       async function startRun() {
         el("runLog").textContent = "";
+        logText = "";
         el("viewResult").disabled = true;
         el("runHint").textContent = "";
         activeSummaryFile = null;
+        el("runProgress").value = 0;
+        el("runProgressText").textContent = "";
 
         const payload = {
           targetUrl: el("targetUrl").value.trim() || null,
@@ -505,10 +546,11 @@
         activeEventSource = new EventSource(`/api/run/${encodeURIComponent(activeRunId)}/events`);
         activeEventSource.addEventListener("log", (ev) => {
           try {
-            const p = JSON.parse(ev.data.replace(/\\n/g, "\n"));
+            // ev.data is JSON; parse first, then print the raw k6 output line(s).
+            const p = JSON.parse(ev.data);
             appendLog(p.line, p.stream);
           } catch (_) {
-            appendLog(ev.data, "stdout");
+            appendLog(String(ev.data), "stdout");
           }
         });
         activeEventSource.addEventListener("status", (_ev) => {
@@ -517,12 +559,13 @@
         activeEventSource.addEventListener("done", async (ev) => {
           let p = null;
           try {
-            p = JSON.parse(ev.data.replace(/\\n/g, "\n"));
+            p = JSON.parse(ev.data);
           } catch (_) {
             p = null;
           }
           setRunUi("idle");
           el("runStatus").textContent = p && p.ok ? "Done" : "Done (thresholds may have failed)";
+          el("runProgress").value = 100;
           if (p && p.summaryFile) activeSummaryFile = p.summaryFile;
           el("viewResult").disabled = !activeSummaryFile;
           await loadFiles().catch(() => {});
