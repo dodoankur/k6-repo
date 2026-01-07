@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>K6 Results Viewer</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: #121a2b;
+        --text: #e6eefc;
+        --muted: #9bb0d1;
+        --border: rgba(255, 255, 255, 0.08);
+        --accent: #4ea1ff;
+        --danger: #ff6b6b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+        background: radial-gradient(1200px 600px at 20% 0%, rgba(78, 161, 255, 0.15), transparent),
+          radial-gradient(900px 500px at 80% 10%, rgba(255, 107, 107, 0.10), transparent),
+          var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      header h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+      header .sub { color: var(--muted); font-size: 13px; }
+      main {
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 14px;
+        padding: 14px;
+      }
+      .panel {
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .panel .title {
+        padding: 12px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .panel .body { padding: 12px; }
+      .list { padding: 0; margin: 0; list-style: none; }
+      .list li { border-bottom: 1px solid var(--border); }
+      .list button {
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        background: transparent;
+        color: var(--text);
+        border: 0;
+        cursor: pointer;
+        display: grid;
+        gap: 2px;
+      }
+      .list button:hover { background: rgba(78,161,255,0.06); }
+      .list button.active { background: rgba(78,161,255,0.12); }
+      .meta { color: var(--muted); font-size: 12px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: rgba(0,0,0,0.18);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        min-height: 90px;
+      }
+      .k { color: var(--muted); font-size: 12px; }
+      .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .hint { color: var(--muted); font-size: 12px; }
+      .err { color: var(--danger); }
+      canvas { width: 100% !important; height: 320px !important; }
+      @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>K6 Results Viewer</h1>
+        <div class="sub">Pick a run → see key metrics and charts</div>
+      </div>
+      <div class="sub" id="status">Loading…</div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="title">
+          <span>Result files (newest first)</span>
+          <button id="refresh" style="background:transparent;border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:10px;cursor:pointer">
+            Refresh
+          </button>
+        </div>
+        <ul class="list" id="files"></ul>
+      </section>
+
+      <section class="panel">
+        <div class="title">
+          <span id="selectedTitle">No file selected</span>
+          <span class="meta" id="selectedMeta"></span>
+        </div>
+        <div class="body">
+          <div class="grid" style="margin-bottom: 12px">
+            <div class="card">
+              <div class="k">Requests</div>
+              <div class="v" id="reqs">—</div>
+              <div class="hint">http_reqs count</div>
+            </div>
+            <div class="card">
+              <div class="k">Error rate</div>
+              <div class="v" id="errRate">—</div>
+              <div class="hint">http_req_failed rate</div>
+            </div>
+            <div class="card">
+              <div class="k">p95 duration</div>
+              <div class="v" id="p95">—</div>
+              <div class="hint">http_req_duration p95 (ms)</div>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px">
+            <div class="card">
+              <div class="k">p99 duration</div>
+              <div class="v" id="p99">—</div>
+              <div class="hint">http_req_duration p99 (ms)</div>
+            </div>
+            <div class="card">
+              <div class="k">Avg duration</div>
+              <div class="v" id="avg">—</div>
+              <div class="hint">http_req_duration avg (ms)</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom: 12px">
+            <div class="k">Latency percentiles (ms)</div>
+            <canvas id="latencyChart"></canvas>
+          </div>
+
+          <div class="card">
+            <div class="k">Throughput & errors</div>
+            <canvas id="rateChart"></canvas>
+          </div>
+
+          <div class="hint" style="margin-top: 10px">
+            Note: charts use the summary values only (not per-second time series).
+          </div>
+          <div class="hint err" id="error"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+      const el = (id) => document.getElementById(id);
+      const statusEl = el("status");
+      const filesEl = el("files");
+      const errorEl = el("error");
+
+      let latencyChart = null;
+      let rateChart = null;
+      let selected = null;
+
+      function fmt(n, digits = 2) {
+        if (n === null || n === undefined || Number.isNaN(n)) return "—";
+        return Number(n).toFixed(digits);
+      }
+
+      function getMetric(summary, name) {
+        return summary?.metrics?.[name];
+      }
+
+      function getVal(summary, name, field) {
+        const m = getMetric(summary, name);
+        return m && m.values ? m.values[field] : null;
+      }
+
+      function setActive(name) {
+        selected = name;
+        for (const btn of filesEl.querySelectorAll("button[data-name]")) {
+          btn.classList.toggle("active", btn.dataset.name === name);
+        }
+      }
+
+      async function loadFiles() {
+        statusEl.textContent = "Loading files…";
+        errorEl.textContent = "";
+        filesEl.innerHTML = "";
+
+        const res = await fetch("/api/results");
+        if (!res.ok) throw new Error("Failed to list results");
+        const data = await res.json();
+        const files = data.files || [];
+
+        if (!files.length) {
+          statusEl.textContent = "No results yet (run a test to generate one).";
+          return;
+        }
+        statusEl.textContent = `${files.length} file(s)`;
+
+        for (const f of files) {
+          const li = document.createElement("li");
+          const btn = document.createElement("button");
+          btn.dataset.name = f.name;
+          btn.innerHTML = `
+            <div style="font-weight:700">${f.name}</div>
+            <div class="meta">${new Date(f.mtimeIso).toLocaleString()} • ${(f.size/1024).toFixed(1)} KB</div>
+          `;
+          btn.addEventListener("click", () => loadOne(f.name, f));
+          li.appendChild(btn);
+          filesEl.appendChild(li);
+        }
+
+        // Auto-select latest
+        await loadOne(files[0].name, files[0]);
+      }
+
+      function upsertCharts(summary) {
+        const p50 = getVal(summary, "http_req_duration", "p(50)");
+        const p90 = getVal(summary, "http_req_duration", "p(90)");
+        const p95 = getVal(summary, "http_req_duration", "p(95)");
+        const p99 = getVal(summary, "http_req_duration", "p(99)");
+
+        const reqRate = getVal(summary, "http_reqs", "rate");
+        const errRate = getVal(summary, "http_req_failed", "rate");
+        const dataRate = getVal(summary, "data_received", "rate");
+
+        const latencyData = [p50, p90, p95, p99].map((x) => (x == null ? 0 : x));
+        const labels = ["p50", "p90", "p95", "p99"];
+
+        const ctx1 = el("latencyChart").getContext("2d");
+        if (latencyChart) latencyChart.destroy();
+        latencyChart = new Chart(ctx1, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "ms",
+                data: latencyData,
+                backgroundColor: "rgba(78,161,255,0.35)",
+                borderColor: "rgba(78,161,255,0.8)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { ticks: { color: "#9bb0d1" }, grid: { color: "rgba(255,255,255,0.06)" } },
+              x: { ticks: { color: "#9bb0d1" }, grid: { display: false } },
+            },
+          },
+        });
+
+        const ctx2 = el("rateChart").getContext("2d");
+        if (rateChart) rateChart.destroy();
+        rateChart = new Chart(ctx2, {
+          type: "bar",
+          data: {
+            labels: ["http_reqs rate", "http_req_failed rate", "data_received rate"],
+            datasets: [
+              {
+                label: "per second",
+                data: [
+                  reqRate == null ? 0 : reqRate,
+                  errRate == null ? 0 : errRate,
+                  dataRate == null ? 0 : dataRate,
+                ],
+                backgroundColor: ["rgba(78,161,255,0.35)", "rgba(255,107,107,0.35)", "rgba(160,255,196,0.25)"],
+                borderColor: ["rgba(78,161,255,0.8)", "rgba(255,107,107,0.8)", "rgba(160,255,196,0.6)"],
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { ticks: { color: "#9bb0d1" }, grid: { color: "rgba(255,255,255,0.06)" } },
+              x: { ticks: { color: "#9bb0d1" }, grid: { display: false } },
+            },
+          },
+        });
+      }
+
+      async function loadOne(name, meta) {
+        setActive(name);
+        errorEl.textContent = "";
+        el("selectedTitle").textContent = name;
+        el("selectedMeta").textContent = meta ? new Date(meta.mtimeIso).toLocaleString() : "";
+
+        const res = await fetch(`/api/results/${encodeURIComponent(name)}`);
+        if (!res.ok) throw new Error("Failed to load result file");
+        const summary = await res.json();
+
+        const reqs = getVal(summary, "http_reqs", "count");
+        const errRate = getVal(summary, "http_req_failed", "rate");
+        const p95 = getVal(summary, "http_req_duration", "p(95)");
+        const p99 = getVal(summary, "http_req_duration", "p(99)");
+        const avg = getVal(summary, "http_req_duration", "avg");
+
+        el("reqs").textContent = reqs == null ? "—" : String(Math.round(reqs));
+        el("errRate").textContent = errRate == null ? "—" : `${fmt(errRate * 100, 2)}%`;
+        el("p95").textContent = p95 == null ? "—" : `${fmt(p95, 0)} ms`;
+        el("p99").textContent = p99 == null ? "—" : `${fmt(p99, 0)} ms`;
+        el("avg").textContent = avg == null ? "—" : `${fmt(avg, 0)} ms`;
+
+        upsertCharts(summary);
+      }
+
+      el("refresh").addEventListener("click", () => loadFiles().catch((e) => (errorEl.textContent = e.message)));
+      loadFiles().catch((e) => {
+        statusEl.textContent = "Error";
+        errorEl.textContent = e.message;
+      });
+    </script>
+  </body>
+</html>
+

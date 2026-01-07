@@ -90,7 +90,22 @@ export default function () {
 }
  
 export function handleSummary(data) {
+  function pad2(n) {
+    return n < 10 ? "0" + n : "" + n;
+  }
+
+  // Use local time for filenames to match your machine clock.
+  const now = new Date();
+  const ts =
+    now.getFullYear() +
+    pad2(now.getMonth() + 1) +
+    pad2(now.getDate()) +
+    "-" +
+    pad2(now.getHours()) +
+    pad2(now.getMinutes()) +
+    pad2(now.getSeconds());
+
   return {
-    "results/summary.json": JSON.stringify(data, null, 2),
+    ["results/summary-" + ts + ".json"]: JSON.stringify(data, null, 2),
   };
 }

@@ -26,6 +26,16 @@ Run 500-parallel mode:
 npm run load:parallel
 ```
 
+## View results in a web page
+
+Start the local results viewer:
+
+```bash
+npm run web
+```
+
+Then open `http://localhost:3000`. You can select any `results/summary-*.json` file (newest first) and see charts.
+
 ### Local K6
 
 If you want to run `k6 ...` directly in your shell, add this repo’s `./bin` to your PATH:
@@ -75,4 +85,4 @@ EXTRA_HEADERS_JSON='{"Authorization":"Bearer YOUR_TOKEN"}' k6 run loadtest/order
 
 ## Results
 
-- A run will write `results/summary.json` (K6 end-of-test summary).
+- Each run writes a new K6 end-of-test summary file like `results/summary-YYYYMMDD-HHMMSS.json` (so runs don’t overwrite each other).
