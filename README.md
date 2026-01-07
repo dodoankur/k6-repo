@@ -77,6 +77,18 @@ Send 500 requests in parallel (500 concurrent VUs):
 PARALLEL_VUS=500 PARALLEL_DURATION="30s" k6 run loadtest/orders-testing.js
 ```
 
+Override total test duration (accepts `10s`, `5m`, `1h` or plain seconds like `600`):
+
+```bash
+TOTAL_DURATION="10m" k6 run loadtest/orders-testing.js
+```
+
+In 500-parallel mode, `TOTAL_DURATION` overrides `PARALLEL_DURATION`:
+
+```bash
+PARALLEL_VUS=500 TOTAL_DURATION="2m" k6 run loadtest/orders-testing.js
+```
+
 Pass additional headers (JSON):
 
 ```bash
