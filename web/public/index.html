@@ -13,6 +13,7 @@
         --border: rgba(255, 255, 255, 0.08);
         --accent: #4ea1ff;
         --danger: #ff6b6b;
+        --ok: #3ddc97;
       }
       * { box-sizing: border-box; }
       body {
@@ -89,7 +90,40 @@
       .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
       .hint { color: var(--muted); font-size: 12px; }
       .err { color: var(--danger); }
+      .ok { color: var(--ok); }
       canvas { width: 100% !important; height: 320px !important; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th, td {
+        padding: 8px 8px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th { color: var(--muted); font-weight: 600; }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-size: 11px;
+      }
+      .badge.ok { color: var(--ok); border-color: rgba(61, 220, 151, 0.35); background: rgba(61, 220, 151, 0.08); }
+      .badge.fail { color: var(--danger); border-color: rgba(255, 107, 107, 0.35); background: rgba(255, 107, 107, 0.08); }
+      details summary { cursor: pointer; color: var(--muted); }
+      pre {
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(0,0,0,0.18);
+        overflow: auto;
+        max-height: 380px;
+        font-size: 12px;
+      }
       @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
     </style>
   </head>
@@ -123,46 +157,114 @@
             <div class="card">
               <div class="k">Requests</div>
               <div class="v" id="reqs">—</div>
-              <div class="hint">http_reqs count</div>
+              <div class="hint"><span id="reqRate">—</span> req/s</div>
             </div>
             <div class="card">
               <div class="k">Error rate</div>
               <div class="v" id="errRate">—</div>
-              <div class="hint">http_req_failed rate</div>
+              <div class="hint"><span id="errCounts">—</span> fails</div>
             </div>
+            <div class="card">
+              <div class="k">Checks</div>
+              <div class="v" id="checkRate">—</div>
+              <div class="hint"><span id="checkCounts">—</span></div>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px">
             <div class="card">
               <div class="k">p95 duration</div>
               <div class="v" id="p95">—</div>
               <div class="hint">http_req_duration p95 (ms)</div>
-            </div>
-          </div>
-
-          <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px">
-            <div class="card">
-              <div class="k">p99 duration</div>
-              <div class="v" id="p99">—</div>
-              <div class="hint">http_req_duration p99 (ms)</div>
             </div>
             <div class="card">
               <div class="k">Avg duration</div>
               <div class="v" id="avg">—</div>
               <div class="hint">http_req_duration avg (ms)</div>
             </div>
+            <div class="card">
+              <div class="k">Iterations</div>
+              <div class="v" id="iters">—</div>
+              <div class="hint"><span id="iterRate">—</span> it/s</div>
+            </div>
+            <div class="card">
+              <div class="k">VUs (max)</div>
+              <div class="v" id="vus">—</div>
+              <div class="hint">vus_max</div>
+            </div>
           </div>
 
           <div class="card" style="margin-bottom: 12px">
-            <div class="k">Latency percentiles (ms)</div>
+            <div class="k">Latency stats (ms)</div>
             <canvas id="latencyChart"></canvas>
           </div>
 
-          <div class="card">
-            <div class="k">Throughput & errors</div>
-            <canvas id="rateChart"></canvas>
+          <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px">
+            <div class="card">
+              <div class="k">Request timing breakdown (avg ms)</div>
+              <canvas id="breakdownChart"></canvas>
+            </div>
+            <div class="card">
+              <div class="k">Rates (per second)</div>
+              <canvas id="rateChart"></canvas>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px">
+            <div class="card">
+              <div class="k">Thresholds</div>
+              <div class="hint" id="thresholdSummary" style="margin-top: 6px"></div>
+              <div style="margin-top: 8px; overflow:auto; max-height: 220px">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Threshold</th>
+                      <th>Actual</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="thresholdRows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="k">Checks (details)</div>
+              <div style="margin-top: 8px; overflow:auto; max-height: 220px">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Check</th>
+                      <th>Pass</th>
+                      <th>Fail</th>
+                    </tr>
+                  </thead>
+                  <tbody id="checkRows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 12px">
+            <div class="card">
+              <div class="k">Data</div>
+              <div class="v"><span id="dataIn">—</span> in</div>
+              <div class="hint"><span id="dataOut">—</span> out</div>
+            </div>
+            <div class="card">
+              <div class="k">Test duration</div>
+              <div class="v" id="dur">—</div>
+              <div class="hint">from summary state</div>
+            </div>
           </div>
 
           <div class="hint" style="margin-top: 10px">
             Note: charts use the summary values only (not per-second time series).
           </div>
+          <details style="margin-top: 10px">
+            <summary>Show raw JSON</summary>
+            <pre id="rawJson"></pre>
+          </details>
           <div class="hint err" id="error"></div>
         </div>
       </section>
@@ -176,12 +278,33 @@
       const errorEl = el("error");
 
       let latencyChart = null;
+      let breakdownChart = null;
       let rateChart = null;
       let selected = null;
 
       function fmt(n, digits = 2) {
         if (n === null || n === undefined || Number.isNaN(n)) return "—";
         return Number(n).toFixed(digits);
+      }
+
+      function bytes(n) {
+        if (n === null || n === undefined || Number.isNaN(n)) return "—";
+        const x = Number(n);
+        const units = ["B", "KB", "MB", "GB"];
+        let u = 0;
+        let v = x;
+        while (v >= 1024 && u < units.length - 1) {
+          v /= 1024;
+          u++;
+        }
+        return `${v.toFixed(v >= 10 || u === 0 ? 0 : 1)} ${units[u]}`;
+      }
+
+      function msHuman(ms) {
+        if (ms === null || ms === undefined || Number.isNaN(ms)) return "—";
+        const x = Number(ms);
+        if (x < 1000) return `${x.toFixed(0)} ms`;
+        return `${(x / 1000).toFixed(2)} s`;
       }
 
       function getMetric(summary, name) {
@@ -191,6 +314,17 @@
       function getVal(summary, name, field) {
         const m = getMetric(summary, name);
         return m && m.values ? m.values[field] : null;
+      }
+
+      function thresholdActual(metricName, metric, expr) {
+        const m = /^([a-z]+|\bp\(\d+\))\s*([<>]=?)\s*([0-9.]+)$/.exec(expr);
+        if (!m) return null;
+        const field = m[1];
+        const target = Number(m[3]);
+        const actual = metric?.values?.[field];
+        if (actual === undefined || actual === null) return null;
+        const unit = metric?.contains === "time" ? "ms" : "";
+        return { metricName, field, target, actual, unit };
       }
 
       function setActive(name) {
@@ -234,17 +368,11 @@
       }
 
       function upsertCharts(summary) {
-        const p50 = getVal(summary, "http_req_duration", "p(50)");
-        const p90 = getVal(summary, "http_req_duration", "p(90)");
-        const p95 = getVal(summary, "http_req_duration", "p(95)");
-        const p99 = getVal(summary, "http_req_duration", "p(99)");
-
-        const reqRate = getVal(summary, "http_reqs", "rate");
-        const errRate = getVal(summary, "http_req_failed", "rate");
-        const dataRate = getVal(summary, "data_received", "rate");
-
-        const latencyData = [p50, p90, p95, p99].map((x) => (x == null ? 0 : x));
-        const labels = ["p50", "p90", "p95", "p99"];
+        const durMetric = getMetric(summary, "http_req_duration");
+        const values = durMetric?.values || {};
+        const ordered = ["min", "avg", "med", "p(90)", "p(95)", "p(99)", "max"];
+        const labels = ordered.filter((k) => values[k] !== undefined);
+        const latencyData = labels.map((k) => (values[k] == null ? 0 : values[k]));
 
         const ctx1 = el("latencyChart").getContext("2d");
         if (latencyChart) latencyChart.destroy();
@@ -271,22 +399,80 @@
           },
         });
 
+        const parts = [
+          ["blocked", "http_req_blocked"],
+          ["connect", "http_req_connecting"],
+          ["tls", "http_req_tls_handshaking"],
+          ["send", "http_req_sending"],
+          ["wait (TTFB)", "http_req_waiting"],
+          ["recv", "http_req_receiving"],
+        ];
+        const breakdownLabels = [];
+        const breakdownData = [];
+        for (const [label, metricName] of parts) {
+          const v = getVal(summary, metricName, "avg");
+          if (v === null || v === undefined) continue;
+          breakdownLabels.push(label);
+          breakdownData.push(v);
+        }
+
+        const ctxB = el("breakdownChart").getContext("2d");
+        if (breakdownChart) breakdownChart.destroy();
+        breakdownChart = new Chart(ctxB, {
+          type: "bar",
+          data: {
+            labels: breakdownLabels,
+            datasets: [
+              {
+                label: "avg ms",
+                data: breakdownData,
+                backgroundColor: "rgba(160,255,196,0.22)",
+                borderColor: "rgba(160,255,196,0.55)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { ticks: { color: "#9bb0d1" }, grid: { color: "rgba(255,255,255,0.06)" } },
+              x: { ticks: { color: "#9bb0d1" }, grid: { display: false } },
+            },
+          },
+        });
+
+        const reqRate = getVal(summary, "http_reqs", "rate");
+        const iterRate = getVal(summary, "iterations", "rate");
+        const dataInRate = getVal(summary, "data_received", "rate");
+        const dataOutRate = getVal(summary, "data_sent", "rate");
+
         const ctx2 = el("rateChart").getContext("2d");
         if (rateChart) rateChart.destroy();
         rateChart = new Chart(ctx2, {
           type: "bar",
           data: {
-            labels: ["http_reqs rate", "http_req_failed rate", "data_received rate"],
+            labels: ["http_reqs", "iterations", "data_received", "data_sent"],
             datasets: [
               {
                 label: "per second",
                 data: [
                   reqRate == null ? 0 : reqRate,
-                  errRate == null ? 0 : errRate,
-                  dataRate == null ? 0 : dataRate,
+                  iterRate == null ? 0 : iterRate,
+                  dataInRate == null ? 0 : dataInRate,
+                  dataOutRate == null ? 0 : dataOutRate,
                 ],
-                backgroundColor: ["rgba(78,161,255,0.35)", "rgba(255,107,107,0.35)", "rgba(160,255,196,0.25)"],
-                borderColor: ["rgba(78,161,255,0.8)", "rgba(255,107,107,0.8)", "rgba(160,255,196,0.6)"],
+                backgroundColor: [
+                  "rgba(78,161,255,0.35)",
+                  "rgba(255,214,102,0.22)",
+                  "rgba(160,255,196,0.25)",
+                  "rgba(198,160,255,0.20)",
+                ],
+                borderColor: [
+                  "rgba(78,161,255,0.8)",
+                  "rgba(255,214,102,0.6)",
+                  "rgba(160,255,196,0.6)",
+                  "rgba(198,160,255,0.55)",
+                ],
                 borderWidth: 1,
               },
             ],
@@ -312,16 +498,94 @@
         const summary = await res.json();
 
         const reqs = getVal(summary, "http_reqs", "count");
+        const reqRate = getVal(summary, "http_reqs", "rate");
         const errRate = getVal(summary, "http_req_failed", "rate");
         const p95 = getVal(summary, "http_req_duration", "p(95)");
-        const p99 = getVal(summary, "http_req_duration", "p(99)");
         const avg = getVal(summary, "http_req_duration", "avg");
+        const errFails = getVal(summary, "http_req_failed", "fails");
+        const checksRate = getVal(summary, "checks", "rate");
+        const checksPasses = getVal(summary, "checks", "passes");
+        const checksFails = getVal(summary, "checks", "fails");
+        const iters = getVal(summary, "iterations", "count");
+        const iterRate = getVal(summary, "iterations", "rate");
+        const vusMax = getVal(summary, "vus_max", "value") ?? getVal(summary, "vus_max", "max");
+        const dataIn = getVal(summary, "data_received", "count");
+        const dataOut = getVal(summary, "data_sent", "count");
+        const durMs = summary?.state?.testRunDurationMs ?? null;
 
         el("reqs").textContent = reqs == null ? "—" : String(Math.round(reqs));
+        el("reqRate").textContent = reqRate == null ? "—" : fmt(reqRate, 2);
         el("errRate").textContent = errRate == null ? "—" : `${fmt(errRate * 100, 2)}%`;
         el("p95").textContent = p95 == null ? "—" : `${fmt(p95, 0)} ms`;
-        el("p99").textContent = p99 == null ? "—" : `${fmt(p99, 0)} ms`;
         el("avg").textContent = avg == null ? "—" : `${fmt(avg, 0)} ms`;
+        el("errCounts").textContent = errFails == null ? "—" : String(Math.round(errFails));
+        el("checkRate").textContent = checksRate == null ? "—" : `${fmt(checksRate * 100, 2)}%`;
+        el("checkCounts").textContent =
+          checksPasses == null && checksFails == null ? "—" : `${checksPasses ?? 0} pass / ${checksFails ?? 0} fail`;
+        el("iters").textContent = iters == null ? "—" : String(Math.round(iters));
+        el("iterRate").textContent = iterRate == null ? "—" : fmt(iterRate, 2);
+        el("vus").textContent = vusMax == null ? "—" : String(Math.round(vusMax));
+        el("dataIn").textContent = bytes(dataIn);
+        el("dataOut").textContent = bytes(dataOut);
+        el("dur").textContent = msHuman(durMs);
+
+        // Thresholds table
+        const rows = [];
+        const metrics = summary?.metrics || {};
+        for (const metricName of Object.keys(metrics)) {
+          const metric = metrics[metricName];
+          const th = metric?.thresholds;
+          if (!th) continue;
+          for (const expr of Object.keys(th)) {
+            const ok = !!th[expr]?.ok;
+            const actual = thresholdActual(metricName, metric, expr);
+            rows.push({ metricName, expr, ok, actual });
+          }
+        }
+        const failed = rows.filter((r) => !r.ok).length;
+        el("thresholdSummary").textContent =
+          rows.length === 0 ? "No thresholds found in this summary." : `${failed} failed / ${rows.length} total`;
+        const tbody = el("thresholdRows");
+        tbody.innerHTML = "";
+        for (const r of rows.sort((a, b) => Number(a.ok) - Number(b.ok))) {
+          const tr = document.createElement("tr");
+          const actualTxt =
+            r.actual == null
+              ? "—"
+              : r.actual.unit
+                ? `${fmt(r.actual.actual, r.actual.unit === "ms" ? 0 : 3)} ${r.actual.unit}`
+                : fmt(r.actual.actual, 3);
+          tr.innerHTML = `
+            <td>${r.metricName}</td>
+            <td>${r.expr}</td>
+            <td>${actualTxt}</td>
+            <td><span class="badge ${r.ok ? "ok" : "fail"}">${r.ok ? "OK" : "FAIL"}</span></td>
+          `;
+          tbody.appendChild(tr);
+        }
+
+        // Checks table (per-check)
+        const checks = summary?.root_group?.checks || [];
+        const cbody = el("checkRows");
+        cbody.innerHTML = "";
+        if (!checks.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="3" class="meta">No checks found.</td>`;
+          cbody.appendChild(tr);
+        } else {
+          for (const c of checks) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${c.name}</td>
+              <td class="ok">${c.passes}</td>
+              <td class="${c.fails ? "err" : ""}">${c.fails}</td>
+            `;
+            cbody.appendChild(tr);
+          }
+        }
+
+        // Raw JSON
+        el("rawJson").textContent = JSON.stringify(summary, null, 2);
 
         upsertCharts(summary);
       }
