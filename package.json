@@ -1,0 +1,17 @@
+{
+  "name": "k6-load-testing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "K6 load tests (run locally or via Docker).",
+  "scripts": {
+    "postinstall": "node scripts/install-k6.js",
+    "k6": "node scripts/k6.js",
+
+    "load": "mkdir -p results && node scripts/k6.js run loadtest/orders-testing.js",
+    "load:parallel": "mkdir -p results && PARALLEL_VUS=500 PARALLEL_DURATION=30s node scripts/k6.js run loadtest/orders-testing.js",
+    "web": "node web/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
